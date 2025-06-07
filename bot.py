@@ -82,14 +82,27 @@ async def send_with_main_menu(context: ContextTypes.DEFAULT_TYPE, update: Update
         await update.message.reply_text(message, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
     elif update.callback_query:
         try:
-            await update.callback_query.edit_message_text(message, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-        except Exception:
-            # Если это было фото — используем caption
-            await update.callback_query.edit_message_caption(
-                caption=message,
+            # Попробуем отредактировать текстовое сообщение
+            await update.callback_query.edit_message_text(
+                message,
                 reply_markup=back_to_menu_keyboard(),
                 parse_mode='Markdown'
             )
+        except telegram.error.BadRequest:
+            # Если это было фото — используем edit_message_caption
+            try:
+                await update.callback_query.edit_message_caption(
+                    caption=message,
+                    reply_markup=back_to_menu_keyboard(),
+                    parse_mode='Markdown'
+                )
+            except telegram.error.BadRequest as e:
+                if "message is not modified" in str(e).lower():
+                    pass  # Необязательно реагировать
+                else:
+                    logging.error(f"Неизвестная ошибка: {e}")
+        except Exception as e:
+            logging.error(f"Ошибка при редактировании сообщения: {e}")
 
 
 # === Команда /start — только здесь показываем лого ===
