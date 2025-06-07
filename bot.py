@@ -300,12 +300,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем QR-код
         await update.message.reply_photo(
             photo=qr_image,
-            caption = f"""
-✅ QR-код успешно создан!
-
-🔗 Данные: `{data}`
-🎨 Цвета: {fill_color} | {bg_color}
-""",
+            caption = f"📎 Твой QR-код для:\n\n`{data}`"
             reply_markup=back_to_menu_keyboard()
         )
 
