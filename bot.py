@@ -297,15 +297,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session.commit()
         session.close()
 
-        # Отправляем QR-код
+        # ✅ Подпись с данными пользователя
+        caption = f"""
+✅ QR-код успешно создан!
+
+📎 Данные: `{data}`
+🎨 Цвета: {fill_color} | {bg_color}
+
+Нажмите "🏡 Главное меню", чтобы создать новый QR-код.
+"""
+
         await update.message.reply_photo(
             photo=qr_image,
-            caption = f"📎 Твой QR-код для:\n\n`{data}`"
+            caption=caption,
+            parse_mode='Markdown',
             reply_markup=back_to_menu_keyboard()
         )
 
-        # Автоматически возвращаемся в главное меню
-        await start(update, context)
         context.user_data.clear()
 
 
