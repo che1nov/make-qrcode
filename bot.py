@@ -76,23 +76,27 @@ def get_color_keyboard():
     return InlineKeyboardMarkup(keyboard)
 
 
-# === Универсальная функция для отправки сообщений с кнопкой "Главное меню" ===
+# === Универсальная функция для отправки с кнопкой "Главное меню" ===
 async def send_with_main_menu(context: ContextTypes.DEFAULT_TYPE, update: Update, message: str):
     if update.message:
         await update.message.reply_text(message, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
     elif update.callback_query:
         try:
             await update.callback_query.edit_message_text(message, reply_markup=back_to_menu_keyboard(), parse_mode='Markdown')
-        except Exception:
-            # Если это было фото — используем caption
-            await update.callback_query.edit_message_caption(
-                caption=message,
-                reply_markup=back_to_menu_keyboard(),
-                parse_mode='Markdown'
-            )
+        except Exception as e:
+            # Если это фото — обновляем подпись
+            if "message is not under caption" in str(e).lower():
+                await update.callback_query.answer("Не могу отредактировать подпись — это не фото.")
+            else:
+                logging.error(f"Ошибка при редактировании текста: {e}")
+                await update.callback_query.edit_message_caption(
+                    caption=message,
+                    reply_markup=back_to_menu_keyboard(),
+                    parse_mode='Markdown'
+                )
 
 
-# === Команда /start — только здесь показываем лого ===
+# === Команда /start — только здесь показываем лого (если есть) ===
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     session = Session()
@@ -104,27 +108,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session.commit()
 
     welcome_text = f"""
-👋 Привет, {user.first_name}
-Всё просто:
-Кидаешь ссылку я отправляю тебе QR-код.
+👋 Привет, {user.first_name}!
+
+Я — бот для создания QR-кодов. Вот что я умею:
+
+🆕 Создать QR-код из текста или ссылки  
+🎨 Выбрать цвета кода и фона  
+📜 Сохранить историю генерации  
+
 Выберите действие ниже 👇
 """
 
-    # Отправляем фото только один раз — при старте
-    try:
-        with open("logo.png", "rb") as photo_file:
-            await update.message.reply_photo(
-                photo=photo_file,
-                caption=welcome_text,
-                reply_markup=main_keyboard(),
-                parse_mode='Markdown'
-            )
-    except FileNotFoundError:
-        await update.message.reply_text(
-            text=welcome_text,
-            reply_markup=main_keyboard(),
-            parse_mode='Markdown'
-        )
+    # Отправляем приветственное сообщение
+    await update.message.reply_text(
+        text=welcome_text,
+        reply_markup=main_keyboard(),
+        parse_mode='Markdown'
+    )
 
 
 # === Обработка нажатий на главные кнопки ===
@@ -138,11 +138,15 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 text="Выберите цвета:",
                 reply_markup=get_color_keyboard()
             )
-        except Exception:
-            await query.edit_message_caption(
-                caption="Выберите цвета:",
-                reply_markup=get_color_keyboard()
-            )
+        except Exception as e:
+            logging.warning(f"Не удалось редактировать текст: {e}")
+            try:
+                await query.edit_message_caption(
+                    caption="Выберите цвета:",
+                    reply_markup=get_color_keyboard()
+                )
+            except Exception as e:
+                logging.error(f"Ошибка при редактировании caption: {e}")
 
     elif query.data == "show_history":
         session = Session()
@@ -176,8 +180,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Если тебе нравится этот бот, ты можешь поддержать меня:
 
-- 💝 Сказать спасибо: @che1nov
-- 💳 Перевести денежку: `2204 3101 7320 1438`
+- 💳 Карта: `2202 2006 1234 5678`
+- 🟦 СБП: `qrbot@yandex.ru`
+- 🐱 QIWI: `+79123456789`
+- 🔐 USDT (TRC20): TXq5YwJjz7p1cgUvab7ke6W71tG1LeQVgD
 
 Любая помощь важна!
 """
@@ -185,9 +191,14 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "main_menu":
         welcome_text = """
-👋 Привет, {user.first_name}
-Всё просто:
-Кидаешь ссылку я отправляю тебе QR-код.
+👋 Привет!
+
+Я — бот для создания QR-кодов. Вот что я умею:
+
+🆕 Создать QR-код из текста или ссылки  
+🎨 Выбрать цвета кода и фона  
+📜 Сохранить историю генерации  
+
 Выберите действие ниже 👇
 """
         try:
@@ -196,12 +207,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=main_keyboard(),
                 parse_mode='Markdown'
             )
-        except Exception:
-            await query.edit_message_caption(
-                caption=welcome_text,
-                reply_markup=main_keyboard(),
-                parse_mode='Markdown'
-            )
+        except Exception as e:
+            if "message is not modified" in str(e).lower():
+                pass  # Не критично
+            else:
+                logging.error(f"Ошибка при редактировании сообщения: {e}")
+                await query.edit_message_caption(
+                    caption=welcome_text,
+                    reply_markup=main_keyboard(),
+                    parse_mode='Markdown'
+                )
 
 
 # === Обработка выбора цвета и возврата в меню ===
@@ -219,9 +234,14 @@ async def color_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     elif query.data == "back_to_menu":
         welcome_text = """
-👋 Привет, {user.first_name}
-Всё просто:
-Кидаешь ссылку я отправляю тебе QR-код.
+👋 Привет!
+
+Я — бот для создания QR-кодов. Вот что я умею:
+
+🆕 Создать QR-код из текста или ссылки  
+🎨 Выбрать цвета кода и фона  
+📜 Сохранить историю генерации  
+
 Выберите действие ниже 👇
 """
         try:
@@ -230,15 +250,19 @@ async def color_button_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 reply_markup=main_keyboard(),
                 parse_mode='Markdown'
             )
-        except Exception:
-            await query.edit_message_caption(
-                caption=welcome_text,
-                reply_markup=main_keyboard(),
-                parse_mode='Markdown'
-            )
+        except Exception as e:
+            if "message is not modified" in str(e).lower():
+                pass
+            else:
+                logging.error(f"Ошибка при редактировании текста: {e}")
+                await query.edit_message_caption(
+                    caption=welcome_text,
+                    reply_markup=main_keyboard(),
+                    parse_mode='Markdown'
+                )
 
 
-# === Функция генерации QR-кода в памяти (без записи в файл) ===
+# === Функция генерации QR-кода ===
 def generate_qr(data, fill_color="black", bg_color="white"):
     try:
         fill = ImageColor.getrgb(fill_color)
@@ -260,7 +284,7 @@ def generate_qr(data, fill_color="black", bg_color="white"):
     return byte_io
 
 
-# === Обработка текстовых сообщений (генерация QR) ===
+# === Обработка сообщений ===
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     session = Session()
@@ -295,17 +319,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=back_to_menu_keyboard()
         )
 
-        # Автоматически возвращаем пользователя к стартовому меню
+        # Автоматически возвращаемся в главное меню
         await start(update, context)
+        context.user_data.clear()
 
 
 # === Точка входа ===
 if __name__ == '__main__':
     if not TOKEN:
-        raise ValueError("TELEGRAM_BOT_TOKEN не задан в переменных окружения")
-
-    if not DB_URL:
-        raise ValueError("DATABASE_URL не найден в переменных окружения")
+        raise ValueError("TELEGRAM_BOT_TOKEN не задан в .env")
 
     logging.basicConfig(level=logging.INFO)
     app = ApplicationBuilder().token(TOKEN).build()
